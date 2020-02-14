@@ -5,26 +5,26 @@ import yaml
 
 from discord.ext import commands
 from include import DB
+from include.errors import *
 from os.path import abspath
 
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
 with open(abspath(config['help_file']), 'r') as helpFile:
     helpInfo = yaml.safe_load(helpFile)
 
-with open(abspath('./include/roles.yml'), 'r') as rolesFile:
+with open(abspath(config['shop_file']), 'r') as rolesFile:
     shopRoles = yaml.safe_load(rolesFile)
+
+with open(abspath(config['roles_file']), 'r') as roles_file:
+    roles = yaml.safe_load(roles_file)
 
 helpInfo = helpInfo['ShopandRoles']
 
 DBConn = None
 
 reactions = ['🇦', '🇧', '🇨', '🇩', '🇪']
-
-
-class SaidNoError(Exception):
-    pass
 
 
 async def shop_messages(bot):
@@ -90,6 +90,8 @@ class ShopandRoles(commands.Cog, name="Role Commands"):
                     return True
                 elif m.content.lower() == 'no':
                     raise SaidNoError
+                elif m.content.lower() == 'cancel':
+                    raise SaidCancelError
                 else:
                     return False
             else:
@@ -98,7 +100,7 @@ class ShopandRoles(commands.Cog, name="Role Commands"):
         await ctx.send("Check your DMs for more info")
 
         roleList = []
-        for role in config['pingable_Roles']:
+        for role in roles['pingable_Roles']:
             roleList.append(ctx.message.guild.get_role(role))
 
         try:
@@ -109,6 +111,9 @@ class ShopandRoles(commands.Cog, name="Role Commands"):
                     await ctx.message.author.add_roles(role)
                 except SaidNoError:
                     await ctx.message.author.remove_roles(role)
+                except SaidCancelError:
+                    await user.send("Alright. No roles changed!")
+                    return
             await user.send("Roles Set! All done!")
         except asyncio.TimeoutError:
             await user.send("Timeout reached. Try again later!")
@@ -297,7 +302,7 @@ class ShopandRoles(commands.Cog, name="Role Commands"):
                 await reaction.message.remove_reaction(reaction.emoji, user)
 
     @commands.check
-    async def globally_block_dms(ctx):
+    async def globally_block_dms(self, ctx):
         return ctx.guild is not None
 
     @commands.Cog.listener()

@@ -11,15 +11,18 @@ from PIL import ImageFont
 from discord.ext import commands
 from include import DB
 from include.utilities import seconds_to_units
+from include.errors import *
 from math import ceil
 from math import floor
 from math import sqrt
 from os.path import abspath
 
 # General Variables #
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
+with open(abspath(config['info_file']), 'r') as infoFile:
+    info = yaml.safe_load(infoFile)
 
 with open(abspath(config['help_file']), 'r') as helpFile:
     helpInfo = yaml.safe_load(helpFile)
@@ -29,14 +32,8 @@ helpInfo = helpInfo['CreditsScore']
 # Database connections #
 DBConn = None
 
-
 async def is_owner(ctx):
-    return ctx.author.id == 207129652345438211
-
-
-class SaidNoError(Exception):
-    pass
-
+    return ctx.author.id == int(info['owner'])
 
 class CreditsScore(commands.Cog, name="Credits, Score and Rank Commands"):
     def __init__(self, bot):
@@ -58,10 +55,10 @@ class CreditsScore(commands.Cog, name="Credits, Score and Rank Commands"):
                 avatarImage.thumbnail((118, 118), Image.ANTIALIAS)
                 dailyImage.paste(avatarImage, (28, 22))
 
-                unameFnt = ImageFont.truetype(abspath("./include/fonts/calibri.ttf"), 60)
+                unameFnt = ImageFont.truetype(abspath(config['dailyFont']), config['dailyFontSize'])
                 unameDraw = ImageDraw.Draw(dailyImage)
                 unameDraw.text((176, 18), f"{author.name}", font=unameFnt, fill=(0, 0, 0))
-                unameDraw.text((176, 94), "Got 200 Credits", font=unameFnt, fill=(0, 0, 0))
+                unameDraw.text((176, 94), f"Got {config('dailyCredits')} Credits", font=unameFnt, fill=(0, 0, 0))
 
                 imgByteArr = io.BytesIO()
                 dailyImage.save(imgByteArr, format='PNG')
@@ -69,7 +66,7 @@ class CreditsScore(commands.Cog, name="Credits, Score and Rank Commands"):
                 sendFile = discord.File(fp=imgByteArr, filename="daily.png")
 
                 dailyUpdate = f"UPDATE Dailies SET DailyUses = DailyUses + 1, LastDaily={int(time.time())} WHERE User = {author.id}"
-                creditUpdate = f"UPDATE Credits SET Credits = Credits + 200 WHERE User = {author.id}"
+                creditUpdate = f"UPDATE Credits SET Credits = Credits + {config('dailyCredits')} WHERE User = {author.id}"
                 await DB.execute(dailyUpdate, DBConn)
                 await DB.execute(creditUpdate, DBConn)
                 await ctx.send(file=sendFile)
@@ -125,9 +122,9 @@ class CreditsScore(commands.Cog, name="Credits, Score and Rank Commands"):
         avatarImage.thumbnail((121, 121), Image.ANTIALIAS)
         scoreImage.paste(avatarImage, (13, 72))
 
-        unameFnt = ImageFont.truetype(abspath("./include/fonts/calibrib.ttf"), 40)
-        levelFnt = ImageFont.truetype(abspath("./include/fonts/calibrib.ttf"), 65)
-        rankFnt = ImageFont.truetype(abspath("./include/fonts/calibrib.ttf"), 50)
+        unameFnt = ImageFont.truetype((abspath(config['scoreunameFont']), config['scoreunameFontSize']))
+        levelFnt = ImageFont.truetype((abspath(config['scoreLvlFont']), config['scoreLvlFontSize']))
+        rankFnt = ImageFont.truetype((abspath(config['scoreRankFont']), config['scoreRankFontSize']))
 
         unameDraw = ImageDraw.Draw(scoreImage)
         levelDraw = ImageDraw.Draw(scoreImage)
@@ -162,6 +159,8 @@ class CreditsScore(commands.Cog, name="Credits, Score and Rank Commands"):
                                     return True
                                 elif m.content.lower() == 'no':
                                     raise SaidNoError
+                                elif m.content.lower() == 'cancel':
+                                    raise SaidCancelError
                                 else:
                                     return False
                             else:
@@ -177,6 +176,8 @@ class CreditsScore(commands.Cog, name="Credits, Score and Rank Commands"):
                         except asyncio.TimeoutError:
                             await ctx.send("Timeout reached. Donation cancelled!")
                         except SaidNoError:
+                            await ctx.send("Donation cancelled")
+                        except SaidCancelError:
                             await ctx.send("Donation cancelled")
                     else:
                         await ctx.send("You do not have enough credits!")
@@ -196,10 +197,13 @@ class CreditsScore(commands.Cog, name="Credits, Score and Rank Commands"):
             if rankEnd < len(rankSelect):
                 rankSelect = rankSelect[rankStart:rankEnd]
                 for user in rankSelect:
-                    users.append(self.bot.get_user(user[0]))
+                    try:
+                        users.append(self.bot.get_user(user[0]))
+                    except:
+                        pass # Add blank
                 rankImage = Image.open(abspath("./include/images/rank.png"))
-                unameRankFnt = ImageFont.truetype(abspath("./include/fonts/calibri.ttf"), 30)
-                levelPointFnt = ImageFont.truetype(abspath("./include/fonts/calibril.ttf"), 18)
+                unameRankFnt = ImageFont.truetype((abspath(config['topunameFont']), config['topunameFontSize']))
+                levelPointFnt = ImageFont.truetype((abspath(config['toplevelFont']), config['toplevelFontSize']))
                 for x in range(0, 10):
                     avatarURL = requests.get(users[x].avatar_url)
                     avatarImage = Image.open(io.BytesIO(avatarURL.content))
@@ -238,8 +242,8 @@ class CreditsScore(commands.Cog, name="Credits, Score and Rank Commands"):
                 for user in rankSelect:
                     users.append(self.bot.get_user(user[0]))
                 rankImage = Image.open(abspath("./include/images/rank.png"))
-                unameRankFnt = ImageFont.truetype(abspath("./include/fonts/calibri.ttf"), 30)
-                levelPointFnt = ImageFont.truetype(abspath("./include/fonts/calibril.ttf"), 18)
+                unameRankFnt = ImageFont.truetype((abspath(config['topunameFont']), config['topunameFontSize']))
+                levelPointFnt = ImageFont.truetype((abspath(config['toplevelFont']), config['toplevelFontSize']))
                 for x in range(0, 10):
                     avatarURL = requests.get(users[x].avatar_url)
                     avatarImage = Image.open(io.BytesIO(avatarURL.content))
@@ -309,7 +313,7 @@ class CreditsScore(commands.Cog, name="Credits, Score and Rank Commands"):
                             await DB.execute(updateLevel, DBConn)
 
     @commands.check
-    async def globally_block_dms(ctx):
+    async def globally_block_dms(self, ctx):
         return ctx.guild is not None
 
     @commands.Cog.listener()
@@ -323,4 +327,4 @@ def setup(bot):
 
 
 def teardown(bot):
-    DB.close()
+    DB.close(DBConn)

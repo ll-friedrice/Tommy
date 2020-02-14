@@ -3,12 +3,12 @@ import time
 import yaml
 
 from datetime import datetime
-from discord.ext import commands
+from discord.ext import commands, tasks
 from include import DB, utilities
 from os.path import abspath
 
 # General Variables #
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
 with open(abspath(config['help_file']), 'r') as helpFile:
@@ -18,33 +18,6 @@ helpInfo = helpInfo['Reminders']
 
 # Database connections #
 DBConn = None
-
-
-class SaidNoError(Exception):
-    pass
-
-
-async def processreminds(bot, DBConnect):
-    while bot.is_ready():
-        # Wait 15 seconds to run again #
-        await asyncio.sleep(15)
-        curTime = int(time.time())
-        # Reminders #
-        remindSelect = f"SELECT User, Reminder FROM Reminders WHERE date <= {curTime}"
-        reminds = await DB.select_all(remindSelect, DBConnect)
-        if len(reminds) > 0:
-            for remind in reminds:
-                try:
-                    user = bot.get_user(remind[0])
-                    reason = remind[1]
-                    await user.send(f"You are being reminded for `{reason}`")
-                    deleteReminder = f"DELETE FROM Reminders WHERE User = {user.id} AND Reminder = '{reason}' AND Date < {curTime}"
-                    await DB.execute(deleteReminder, DBConnect)
-                except AttributeError:
-                    chanTest = bot.get_channel(config['testing_Channel'])
-                    print(f"Unable to remind user: {remind[0]}")
-                    await chanTest.send(f"Unable to remind user: {remind[0]}")
-
 
 class Reminders(commands.Cog, name="Reminder Commands"):
     def __init__(self, bot):
@@ -114,14 +87,43 @@ class Reminders(commands.Cog, name="Reminder Commands"):
             await ctx.send("You have no reminders")
 
     @commands.check
-    async def globally_block_dms(ctx):
+    async def globally_block_dms(self, ctx):
         return ctx.guild is not None
+
+    @tasks.loop(seconds=15.0, reconnect=True)
+    async def process_reminds(self):
+        curTime = int(time.time())
+        # Reminders #
+        remindSelect = f"SELECT User, Reminder FROM Reminders WHERE date <= {curTime}"
+        reminds = await DB.select_all(remindSelect, DBConn)
+        if len(reminds) > 0:
+            for remind in reminds:
+                try:
+                    user = self.bot.get_user(remind[0])
+                    reason = remind[1]
+                    await user.send(f"You are being reminded for `{reason}`")
+                    deleteReminder = f"DELETE FROM Reminders WHERE User = {user.id} AND Reminder = '{reason}' AND Date < {curTime}"
+                    await DB.execute(deleteReminder, DBConn)
+                except AttributeError:
+                    chanTest = self.bot.get_channel(config['testing_Channel'])
+                    print(f"Unable to remind user: {remind[0]}")
+                    await chanTest.send(f"Unable to remind user: {remind[0]}")
+
+    @process_reminds.before_loop
+    async def before_process_reminds(self):
+        await self.bot.wait_until_ready()
+        chanTest = self.bot.get_channel(config['testing_Channel'])
+        await chanTest.send("Remind Processor Started")
 
     @commands.Cog.listener()
     async def on_ready(self):
         global DBConn
         DBConn = await DB.connect()
-        await processreminds(self.bot, DBConn)
+        self.process_reminds.start() # pylint: disable=no-member
+
+    @commands.Cog.listener()
+    async def on_disconnect(self):
+        self.process_reminds.cancel() # pylint: disable=no-member
 
 
 def setup(bot):
@@ -129,4 +131,4 @@ def setup(bot):
 
 
 def teardown(bot):
-    DB.close()
+    DB.close(DBConn)

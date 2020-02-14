@@ -9,7 +9,7 @@ import yaml
 from os.path import abspath
 
 # General Variables #
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
 

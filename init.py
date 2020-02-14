@@ -13,7 +13,7 @@ from os.path import abspath
 from include import DB
 
 # General Variables #
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
 bot = commands.Bot(command_prefix="!")

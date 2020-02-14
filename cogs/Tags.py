@@ -3,11 +3,12 @@ import time
 import yaml
 
 from include import DB
+from include.errors import SaidNoError
 from discord.ext import commands
 from os.path import abspath
 
 # General Variables #
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
 with open(abspath(config['help_file']), 'r') as helpFile:
@@ -17,11 +18,6 @@ helpInfo = helpInfo['Tags']
 
 # Database connections #
 DBConn = None
-
-
-class SaidNoError(Exception):
-    pass
-
 
 class Tags(commands.Cog, name="Tag Commands"):
     def __init__(self, bot):
@@ -38,7 +34,7 @@ class Tags(commands.Cog, name="Tag Commands"):
                 creditCheck = f"SELECT Credits FROM Credits WHERE User = {author.id}"
                 credits = await DB.select_one(creditCheck, DBConn)
                 if credits is not None:
-                    if credits[0] >= 1000:
+                    if credits[0] >= config['tagCost']:
                         def check(m):
                             if m.author == author and m.channel == ctx.message.channel:
                                 if m.content.lower() == 'yes':
@@ -50,13 +46,13 @@ class Tags(commands.Cog, name="Tag Commands"):
                             else:
                                 return False
                         tagPrompt = f"Would you like to create the tag `{tagname}` with content `{tagContent}`?"
-                        await ctx.send(f"Creating a tag will cost `1000 credits`. \n{tagPrompt}")
+                        await ctx.send(f"Creating a tag will cost `{config['tagCost']} credits`. \n{tagPrompt}")
                         try:
                             await self.bot.wait_for('message', check=check, timeout=30)
                             nowTime = int(time.time())
                             tagInsert = f"INSERT INTO Tags (TagName, User, Content, LastUpdated) VALUES ('{tagname}', {author.id}, '{tagContent}', {nowTime})"
                             await DB.execute(tagInsert, DBConn)
-                            creditsUpdate = f"UPDATE Credits SET Credits = Credits - 1000 WHERE User = {author.id}"
+                            creditsUpdate = f"UPDATE Credits SET Credits = Credits - {config['tagCost']} WHERE User = {author.id}"
                             await DB.execute(creditsUpdate, DBConn)
                             await ctx.send("Tag Created!")
                         except asyncio.TimeoutError:
@@ -161,7 +157,7 @@ class Tags(commands.Cog, name="Tag Commands"):
             await ctx.send("Tag does not exist")
 
     @commands.check
-    async def globally_block_dms(ctx):
+    async def globally_block_dms(self, ctx):
         return ctx.guild is not None
 
     @commands.Cog.listener()
@@ -175,4 +171,4 @@ def setup(bot):
 
 
 def teardown(bot):
-    DB.close()
+    DB.close(DBConn)

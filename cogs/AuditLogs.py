@@ -7,9 +7,11 @@ from datetime import datetime
 from discord.ext import commands
 from os.path import abspath
 
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
+with open(abspath(config['slurs_file']), 'r') as slurFile:
+    slurs = yaml.safe_load(slurFile)
 
 class AuditLogs(commands.Cog, name="Audits"):
     def __init__(self, bot):
@@ -21,7 +23,7 @@ class AuditLogs(commands.Cog, name="Audits"):
         if message.author != self.bot.user:
             slurFound = False
             slursUsed = []
-            slurlist = config['slurs']
+            slurlist = slurs['slurs']
             for slur in slurlist:
                 if message.content.find(slur['word']) != -1:
                     slurFound = True
@@ -146,7 +148,7 @@ class AuditLogs(commands.Cog, name="Audits"):
         await banLog.send(embed=embedUnban)
 
     @commands.check
-    async def globally_block_dms(ctx):
+    async def globally_block_dms(self, ctx):
         return ctx.guild is not None
 
 

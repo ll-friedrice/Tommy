@@ -11,8 +11,11 @@ from discord.ext import commands
 from os.path import abspath
 
 # General Variables #
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
+
+with open(abspath(config['roles_file']), 'r') as rolesFile:
+    roles = yaml.safe_load(configFile)
 
 # Database connections #
 DBConn = None
@@ -26,7 +29,7 @@ class JoinLeave(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member):
         guild = self.bot.get_guild(config['server_ID'])
-        joinRole = guild.get_role(config['join_Role'])
+        joinRole = guild.get_role(roles['join_Role'])
         username = f"{member.name}#{member.discriminator}"
         JoinDate = int(member.joined_at.timestamp())
         CreatedDate = int(member.created_at.timestamp())
@@ -46,7 +49,7 @@ class JoinLeave(commands.Cog):
 
         # Update Status #
 
-        await self.bot.change_presence(status=discord.Status.online, activity=discord.Game(f"with {guild.member_count - 3} members"))
+        await self.bot.change_presence(status=discord.Status.online, activity=discord.Game(f"with {guild.member_count - config['botCount']} members"))
 
         # Join Image #
         dailyImage = Image.open(abspath("./include/images/daily.png"))
@@ -56,7 +59,7 @@ class JoinLeave(commands.Cog):
         avatarImage.thumbnail((118, 118), Image.ANTIALIAS)
         dailyImage.paste(avatarImage, (28, 22))
 
-        unameFnt = ImageFont.truetype(abspath("./include/fonts/calibri.ttf"), 60)
+        unameFnt = ImageFont.truetype((abspath(config['joinunameFont']), config['joinunameFontSize']))
         unameDraw = ImageDraw.Draw(dailyImage)
         unameDraw.text((176, 18), f"{member.name}", font=unameFnt, fill=(0, 0, 0))
         unameDraw.text((176, 94), "Joined the server!", font=unameFnt, fill=(0, 0, 0))
@@ -86,7 +89,7 @@ class JoinLeave(commands.Cog):
         DBConn = await DB.connect()
 
     @commands.check
-    async def globally_block_dms(ctx):
+    async def globally_block_dms(self, ctx):
         return ctx.guild is not None
 
 
@@ -95,4 +98,4 @@ def setup(bot):
 
 
 def teardown(bot):
-    DB.close()
+    DB.close(DBConn)

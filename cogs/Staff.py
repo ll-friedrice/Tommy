@@ -4,70 +4,24 @@ import time
 import yaml
 
 from datetime import datetime
-from discord.ext import commands
+from discord.ext import commands, tasks
 from os.path import abspath
 from include import DB
 
 # General Variables #
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
 with open(abspath(config['help_file']), 'r') as helpFile:
     helpInfo = yaml.safe_load(helpFile)
 
+with open(abspath(config['roles_file']), 'r') as roles_file:
+    roles = yaml.safe_load(roles_file)
+
 helpInfo = helpInfo['Staff']
 
 # Database connections #
 DBConn = None
-
-
-async def processmutes(bot, DBConnect):
-    while bot.is_ready():
-        await asyncio.sleep(60)  # run every 60 seconds
-        curTime = int(time.time())
-        muteSelect = f"SELECT User FROM Mutes WHERE UnmuteTime <= {curTime}"
-        unmutes = await DB.select_all(muteSelect, DBConnect)
-        if len(unmutes) > 0:
-            for userToUnmute in unmutes:
-                try:
-                    guild = bot.get_guild(config['server_ID'])
-                    muteRole = guild.get_role(config['mute_Role'])
-                    defaultRole = guild.get_role(config['join_Role'])
-                    user = guild.get_member(userToUnmute[0])
-                    await user.remove_roles(muteRole)
-                    await user.add_roles(defaultRole)
-                    await user.send("You have been unmuted")
-                    deleteMute = f"DELETE FROM Mutes WHERE User ={user.id}"
-                    await DB.execute(deleteMute, DBConnect)
-                except AttributeError:
-                    chanTest = bot.get_channel(config['testing_Channel'])
-                    print(f"Unable to unmute user: {userToUnmute[0]}")
-                    await chanTestst.send(f"Unable to unmute user: {userToUnmute[0]}")
-
-
-async def processtempbans(bot, DBConnect):
-    while bot.is_ready():
-        await asyncio.sleep(300)  # run every 5 minutes
-        curTime = int(time.time())
-        # unban #
-        banSelect = f"SELECT User FROM TempBans WHERE UnbanTime <= {curTime}"
-        unbans = await DB.select_all(banSelect, DBConnect)
-        if len(unbans) > 0:
-            for userToUnban in unbans:
-                try:
-                    guild = bot.get_guild(config['server_ID'])
-                    user = discord.Object(id=userToUnban[0])
-                    print(user)
-                    print("Attempting to unban")
-                    guild = bot.get_guild(config['server_ID'])
-                    await guild.unban(user)
-                    await user.send("You have been unbanned")
-                    deleteMute = f"DELETE FROM TempBans WHERE User ={user.id}"
-                    await DB.execute(deleteMute, DBConnect)
-                except AttributeError:
-                    chanTest = bot.get_channel(config['testing_Channel'])
-                    print(f"Unable to unban user: {userToUnban[0]}")
-                    await chanTest.send(f"Unable to unban user: {userToUnban[0]}")
 
 
 class Staff(commands.Cog, name="Staff Commands"):
@@ -76,7 +30,7 @@ class Staff(commands.Cog, name="Staff Commands"):
         self._last_member = None
 
     @commands.command(brief=helpInfo['say']['brief'], usage=helpInfo['say']['usage'])
-    @commands.has_role(config['staff_Role'])
+    @commands.has_role(roles['staff_Role'])
     async def say(self, ctx, channel: discord.TextChannel = None, *, textToSay):
         if channel is None:
             channel = ctx.channel
@@ -84,10 +38,10 @@ class Staff(commands.Cog, name="Staff Commands"):
         await ctx.message.delete()
 
     @commands.command(brief=helpInfo['kick']['brief'], usage=helpInfo['kick']['usage'])
-    @commands.has_role(config['staff_Role'])
+    @commands.has_role(roles['staff_Role'])
     async def kick(self, ctx, user: discord.Member):
         staffRole = self.bot.get_guild(
-            config['server_ID']).get_role(config['staff_Role'])
+            config['server_ID']).get_role(roles['staff_Role'])
         if staffRole not in user.roles:
             await user.kick(reason=ctx.author.name)
             await ctx.send(f"{user.mention} has been kicked!")
@@ -95,10 +49,10 @@ class Staff(commands.Cog, name="Staff Commands"):
             await ctx.send("You cannot kick another staff member!")
 
     @commands.command(brief=helpInfo['ban']['brief'], usage=helpInfo['ban']['usage'])
-    @commands.has_role(config['staff_Role'])
+    @commands.has_role(roles['staff_Role'])
     async def ban(self, ctx, user: discord.Member, *, banreason=None):
         staffRole = self.bot.get_guild(
-            config['server_ID']).get_role(config['staff_Role'])
+            config['server_ID']).get_role(roles['staff_Role'])
         if staffRole not in user.roles:
             if banreason is None:
                 await user.send("You have been banned.")
@@ -111,12 +65,12 @@ class Staff(commands.Cog, name="Staff Commands"):
             await ctx.send("You cannot ban another staff member!")
 
     @commands.command(brief=helpInfo['mute']['brief'], usage=helpInfo['mute']['usage'])
-    @commands.has_role(config['staff_Role'])
+    @commands.has_role(roles['staff_Role'])
     async def mute(self, ctx, user: discord.Member, mutetime=5):
         guild = self.bot.get_guild(config['server_ID'])
-        muteRole = guild.get_role(config['mute_Role'])
-        defaultRole = guild.get_role(config['join_Role'])
-        staffRole = guild.get_role(config['staff_Role'])
+        muteRole = guild.get_role(roles['mute_Role'])
+        defaultRole = guild.get_role(roles['join_Role'])
+        staffRole = guild.get_role(roles['staff_Role'])
         if staffRole not in user.roles:
             try:
                 timeToMute = int(mutetime) * 60 + int(time.time())
@@ -137,10 +91,10 @@ class Staff(commands.Cog, name="Staff Commands"):
             await ctx.send("You cannot mute another staff member!")
 
     @commands.command(brief=helpInfo['tempban']['brief'], usage=helpInfo['tempban']['usage'])
-    @commands.has_role(config['staff_Role'])
+    @commands.has_role(roles['staff_Role'])
     async def tempban(self, ctx, user: discord.Member, banHours=24):
         guild = self.bot.get_guild(config['server_ID'])
-        staffRole = guild.get_role(config['staff_Role'])
+        staffRole = guild.get_role(roles['staff_Role'])
         if staffRole not in user.roles:
             try:
                 timeToUnban = int(banHours) * 3600 + int(time.time())
@@ -159,10 +113,10 @@ class Staff(commands.Cog, name="Staff Commands"):
             await ctx.send("You cannot ban another staff member!")
 
     @commands.command(brief=helpInfo['warn']['brief'], usage=helpInfo['warn']['usage'])
-    @commands.has_role(config['staff_Role'])
+    @commands.has_role(roles['staff_Role'])
     async def warn(self, ctx, user: discord.Member, *, reason):
         guild = self.bot.get_guild(config['server_ID'])
-        staffRole = guild.get_role(config['staff_Role'])
+        staffRole = guild.get_role(roles['staff_Role'])
         if staffRole not in user.roles:
             try:
                 warnInsert = f"INSERT INTO Warnings (User, Reason, Date, WarnedBy) VALUES ({user.id},'{reason}',{int(time.time())},{ctx.author.id})"
@@ -176,11 +130,11 @@ class Staff(commands.Cog, name="Staff Commands"):
             print("You cannot warn another staff member!")
 
     @commands.command(brief=helpInfo['unmute']['brief'], usage=helpInfo['unmute']['usage'])
-    @commands.has_role(config['staff_Role'])
+    @commands.has_role(roles['staff_Role'])
     async def unmute(self, ctx, user: discord.Member = None):
         guild = self.bot.get_guild(config['server_ID'])
-        muteRole = guild.get_role(config['mute_Role'])
-        defaultRole = guild.get_role(config['join_Role'])
+        muteRole = guild.get_role(roles['mute_Role'])
+        defaultRole = guild.get_role(roles['join_Role'])
         if muteRole in user.roles:
             await user.remove_roles(muteRole)
             await user.add_roles(defaultRole)
@@ -190,7 +144,7 @@ class Staff(commands.Cog, name="Staff Commands"):
             await DB.execute(deleteMute, DBConn)
 
     @commands.command(brief=helpInfo['chkwarn']['brief'], usage=helpInfo['chkwarn']['usage'])
-    @commands.has_role(config['staff_Role'])
+    @commands.has_role(roles['staff_Role'])
     async def chkwarn(self, ctx, user: discord.Member):
         selectWarn = f"SELECT reason, date FROM Warnings WHERE User={user.id}"
         warns = await DB.select_all(selectWarn, DBConn)
@@ -198,7 +152,7 @@ class Staff(commands.Cog, name="Staff Commands"):
         embedWarn = discord.Embed(colour=0x753543)
         embedWarn.set_author(name=user.name, icon_url=user.avatar_url)
         if warns is None:
-            embedWarn.add_field(name="User has no warns", inline=True)
+            embedWarn.add_field(name="User has no warns", value=" ", inline=True)
             embedWarn.set_footer(text="# of warns: 0")
         else:
             warnCount = len(warns)
@@ -211,7 +165,7 @@ class Staff(commands.Cog, name="Staff Commands"):
         await ctx.send(embed=embedWarn)
 
     @commands.command(brief=helpInfo['userinfo']['brief'], usage=helpInfo['userinfo']['usage'])
-    @commands.has_role(config['staff_Role'])
+    @commands.has_role(roles['staff_Role'])
     async def userinfo(self, ctx, *, user: discord.Member):
         selectWarn = f"SELECT count(date) FROM Warnings WHERE User={user.id}"
         selectDailies = f"SELECT DailyUses FROM Dailies WHERE User={user.id}"
@@ -243,7 +197,7 @@ class Staff(commands.Cog, name="Staff Commands"):
         await ctx.send(embed=embedInfo)
 
     @commands.command(brief=helpInfo['roleinfo']['brief'], usage=helpInfo['roleinfo']['usage'])
-    @commands.has_role(config['staff_Role'])
+    @commands.has_role(roles['staff_Role'])
     async def roleinfo(self, ctx, *, role: discord.Role):
         usersWithRole = 0
         for user in ctx.message.channel.guild.members:
@@ -262,7 +216,7 @@ class Staff(commands.Cog, name="Staff Commands"):
         await ctx.send(embed=embedRole)
 
     @commands.command(brief=helpInfo['resetstatus']['brief'], usage=helpInfo['resetstatus']['usage'])
-    @commands.has_role(config['staff_Role'])
+    @commands.has_role(roles['staff_Role'])
     async def resetstatus(self, ctx):
         guild = ctx.message.channel.guild
         await ctx.send("Resetting status")
@@ -270,29 +224,85 @@ class Staff(commands.Cog, name="Staff Commands"):
 
     @commands.Cog.listener()
     async def on_typing(self, channel, user, when):
-        if channel.id == 555581004698615809:
+        if channel.id == config['announcements']['channel']:
             guild = self.bot.get_guild(config['server_ID'])
-            pingRole = guild.get_role(560301865666084919)
+            pingRole = guild.get_role(config['announcements']['id'])
             await pingRole.edit(reason="Announcement", mentionable=True)
             await asyncio.sleep(30)
             await pingRole.edit(reason="Announcement", mentionable=False)
 
     @commands.check
-    async def globally_block_dms(ctx):
+    async def globally_block_dms(self, ctx):
         return ctx.guild is not None
 
     @commands.Cog.listener()
     async def on_ready(self):
         global DBConn
         DBConn = await DB.connect()
-        await processtempbans(self.bot, DBConn)
+        self.process_mutes.start() # pylint: disable=no-member
+        self.process_temp_bans.start() # pylint: disable=no-member
 
     @commands.Cog.listener()
-    async def on_ready(self):
-        global DBConn
-        DBConn = await DB.connect()
-        await processmutes(self.bot, DBConn)
+    async def on_disconnect(self):
+        self.process_mutes.cancel() # pylint: disable=no-member
+        self.process_temp_bans.cancel() # pylint: disable=no-member
 
+    @tasks.loop(seconds=60.0, reconnect=True)
+    async def process_mutes(self):
+        curTime = int(time.time())
+        muteSelect = f"SELECT User FROM Mutes WHERE UnmuteTime <= {curTime}"
+        unmutes = await DB.select_all(muteSelect, DBConn)
+        if len(unmutes) > 0:
+            for userToUnmute in unmutes:
+                try:
+                    guild = self.bot.get_guild(config['server_ID'])
+                    muteRole = guild.get_role(roles['mute_Role'])
+                    defaultRole = guild.get_role(roles['join_Role'])
+                    user = guild.get_member(userToUnmute[0])
+                    await user.remove_roles(muteRole)
+                    await user.add_roles(defaultRole)
+                    await user.send("You have been unmuted")
+                    deleteMute = f"DELETE FROM Mutes WHERE User ={user.id}"
+                    await DB.execute(deleteMute, DBConn)
+                except AttributeError:
+                    chanTest = self.bot.get_channel(config['testing_Channel'])
+                    print(f"Unable to unmute user: {userToUnmute[0]}")
+                    await chanTest.send(f"Unable to unmute user: {userToUnmute[0]}")
+
+    @process_mutes.before_loop
+    async def before_process_mutes(self):
+        await self.bot.wait_until_ready()
+        chanTest = self.bot.get_channel(config['testing_Channel'])
+        await chanTest.send("Mute Processing Started")
+
+    @tasks.loop(seconds=300.0, reconnect=True)
+    async def process_temp_bans(self):
+        curTime = int(time.time())
+        # unban #
+        banSelect = f"SELECT User FROM TempBans WHERE UnbanTime <= {curTime}"
+        unbans = await DB.select_all(banSelect, DBConn)
+        if len(unbans) > 0:
+            for userToUnban in unbans:
+                try:
+                    guild = self.bot.get_guild(config['server_ID'])
+                    user = discord.Object(id=userToUnban[0])
+                    print(user)
+                    print("Attempting to unban")
+                    guild = self.bot.get_guild(config['server_ID'])
+                    await guild.unban(user)
+                    await user.send("You have been unbanned")
+                    deleteMute = f"DELETE FROM TempBans WHERE User ={user.id}"
+                    await DB.execute(deleteMute, DBConn)
+                except AttributeError:
+                    chanTest = self.bot.get_channel(config['testing_Channel'])
+                    print(f"Unable to unban user: {userToUnban[0]}")
+                    await chanTest.send(f"Unable to unban user: {userToUnban[0]}")
+
+    @process_temp_bans.before_loop
+    async def before_process_temp_bans(self):
+        await self.bot.wait_until_ready()
+        chanTest = self.bot.get_channel(config['testing_Channel'])
+        await chanTest.send("Temp Ban Processing Started")
 
 def setup(bot):
     bot.add_cog(Staff(bot))

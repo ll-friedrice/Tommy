@@ -3,26 +3,18 @@ import discord
 import yaml
 
 from discord.ext import commands
+from include.errors import *
 from json import dumps as jsdumps
 from requests import post
 from os.path import abspath
 
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
 with open(abspath(config['help_file']), 'r') as helpFile:
     helpInfo = yaml.safe_load(helpFile)
 
 helpInfo = helpInfo['SuggestionReport']
-
-
-class SaidCancelError(Exception):
-    pass
-
-
-class SaidNoError(Exception):
-    pass
-
 
 class SuggestReport(commands.Cog, name="Suggestion and Report Commands"):
     def __init__(self, bot):
@@ -85,7 +77,7 @@ class SuggestReport(commands.Cog, name="Suggestion and Report Commands"):
                     "Suggestion": suggestion,
                     "TimeSubmitted": dateSubmitted
                 }
-                response = post(
+                post(
                     config['botSuggestHook'], data=jsdumps(submitData),
                     headers={'Content-Type': 'application/json'}
                 )
@@ -100,7 +92,7 @@ class SuggestReport(commands.Cog, name="Suggestion and Report Commands"):
                 "Suggestion": suggestion,
                 "TimeSubmitted": dateSubmitted
             }
-            response = post(
+            post(
                 config['botSuggestHook'], data=jsdumps(submitData),
                 headers={'Content-Type': 'application/json'}
             )
@@ -172,7 +164,7 @@ class SuggestReport(commands.Cog, name="Suggestion and Report Commands"):
             await author.send("Timeout reached. Report cancelled!")
 
     @commands.check
-    async def globally_block_dms(ctx):
+    async def globally_block_dms(self, ctx):
         return ctx.guild is not None
 
 

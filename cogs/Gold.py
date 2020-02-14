@@ -7,19 +7,15 @@ import yaml
 
 from discord.ext import commands
 from include import DB
+from include.errors import *
 from os.path import abspath
 
 # General Variables #
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
 # Database connections #
 DBConn = None
-
-
-class SaidNoError(Exception):
-    pass
-
 
 class Gold(commands.Cog, name="Gilding"):
     def __init__(self, bot):
@@ -29,30 +25,32 @@ class Gold(commands.Cog, name="Gilding"):
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
         if user.id != self.bot.user.id and reaction.message.channel.id != config['shop_Channel']:
-            if reaction.emoji.id == 569642972262432784:
+            if reaction.emoji.id == config['goldEmojiID']:
                 message = reaction.message
                 if user != message.author:
                     creditsSelect = f"SELECT Credits FROM Credits WHERE User ={user.id}"
                     credits = await DB.select_one(creditsSelect, DBConn)
                     if credits is not None:
-                        if credits[0] >= 2000:
+                        if credits[0] >= config['goldCost']:
                             def check(m):
                                 if m.author == user and m.channel == user.dm_channel:
                                     if m.content.lower() == 'yes':
                                         return True
                                     elif m.content.lower() == 'no':
                                         raise SaidNoError
+                                    elif m.content.lower() == 'cancel':
+                                        raise SaidCancelError
                                     else:
                                         return False
                                 else:
                                     return False
                             goldPrompt = f"Would you like to give gold to {message.author.name}?"
-                            await user.send(f"Giving gold will cost `2000 credits`. \n{goldPrompt}")
+                            await user.send(f"Giving gold will cost `{config['goldCost']} credits`. \n{goldPrompt}")
                             try:
                                 await self.bot.wait_for('message', check=check, timeout=30)
                                 goldInsert = f"INSERT INTO Golds (User, TimeGiven, GivenBy) VALUES({message.author.id}, {int(time.time())}, {user.id})"
                                 await DB.execute(goldInsert, DBConn)
-                                creditsUpdate = f"UPDATE Credits SET Credits = Credits - 2000 WHERE User = {user.id}"
+                                creditsUpdate = f"UPDATE Credits SET Credits = Credits - {config['goldCost']} WHERE User = {user.id}"
                                 await DB.execute(creditsUpdate, DBConn)
                                 await user.send("Okay!")
                                 await message.author.send(f"You have been given gold by {user.name} for your message: `{message.content}`")
@@ -107,7 +105,7 @@ class Gold(commands.Cog, name="Gilding"):
         DBConn = await DB.connect()
 
     @commands.check
-    async def globally_block_dms(ctx):
+    async def globally_block_dms(self, ctx):
         return ctx.guild is not None
 
 
@@ -116,4 +114,4 @@ def setup(bot):
 
 
 def teardown(bot):
-    DB.close()
+    DB.close(DBConn)

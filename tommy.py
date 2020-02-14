@@ -2,7 +2,7 @@
 # **************************************** #
 # tommy.py
 # Written by x2110311x
-# Main file for running Tommy Bot
+# Main file for running Tommy
 # **************************************** #
 
 # Include Libraries #
@@ -21,99 +21,20 @@ from os.path import abspath
 
 
 # General Variables #
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
-intStartTime = int(time.time())  # time the bot started at
-bot = commands.Bot(command_prefix="!")
+bot = commands.Bot(command_prefix=config['commandPrefix'])
 
 DBConn = None
 
-startup_extensions = ["cogs.JoinLeave",
-                      "cogs.FM",
-                      "cogs.Staff",
-                      "cogs.CreditsScore",
-                      "cogs.Tags",
-                      "cogs.Reminders",
-                      "cogs.Gold",
-                      "cogs.Fun",
-                      "cogs.AuditLogs",
-                      "cogs.ShopandRoles",
-                      "cogs.SocialMedia",
-                      "cogs.SuggestReport",
-                      "cogs.concert"]
-
-for extension in startup_extensions:
-    bot.load_extension(extension)
-
-
-with open(abspath(config['help_file']), 'r') as helpFile:
-    helpInfo = yaml.safe_load(helpFile)
-
-helpInfo = helpInfo['Utilities']
-
-logger = logging.getLogger('discord')
-logger.setLevel(logging.WARNING)
-handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
-handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
-logger.addHandler(handler)
-
-
-async def is_owner(ctx):
-    return ctx.author.id == 207129652345438211
-
-
-class Utilities(commands.Cog, name="Utility Commands"):
-    def __init__(self, bot):
-        self.bot = bot
-        self._last_member = None
-
-    @commands.command(brief=helpInfo['epoch']['brief'], usage=helpInfo['epoch']['usage'])
-    async def epoch(self, ctx):
-        intCurEpoch = int(time.time())
-        await ctx.send(f"The current epoch is {intCurEpoch}")
-
-    @commands.command(brief=helpInfo['fromepoch']['brief'], usage=helpInfo['fromepoch']['usage'])
-    async def fromepoch(self, ctx, epoch: int):
-        dateTime = datetime.utcfromtimestamp(epoch).strftime("%m/%d/%Y, %H:%M:%S") + " GMT"
-        await ctx.send(f"{epoch} is {dateTime}")
-
-    @commands.command(brief=helpInfo['reloadextensions']['brief'], usage=helpInfo['reloadextensions']['usage'])
-    @commands.check(is_owner)
-    async def reloadextensions(self, ctx):
-        for extension in startup_extensions:
-            bot.reload_extension(extension)
-
-        await ctx.send("Extensions reloaded!")
-
-    @commands.command(brief=helpInfo['update']['brief'], usage=helpInfo['update']['usage'])
-    @commands.check(is_owner)
-    async def update(self, ctx):
-        await ctx.send("Updating Bot")
-        system('sudo /bot/tommy/bot/bashscripts/update.sh')
-
-    @commands.command(brief=helpInfo['update']['brief'], usage=helpInfo['update']['usage'])
-    @commands.check(is_owner)
-    async def restart(self, ctx):
-        await ctx.send("Restarting Bot")
-        system('sudo /bot/tommy/bot/bashscripts/restart.sh')
-
-    @commands.command(brief=helpInfo['ping']['brief'], usage=helpInfo['ping']['usage'])
-    async def ping(self, ctx):
-        msgResp = await ctx.send("Bot is up!")
-        editStamp = utilities.msdiff(ctx.message.created_at, msgResp.created_at)
-        strResp = f"Pong! `{editStamp}ms`"
-        await msgResp.edit(content=strResp)
-
-    @commands.command(brief=helpInfo['uptime']['brief'], usage=helpInfo['uptime']['usage'])
-    async def uptime(self, ctx):
-        nowtime = time.time()
-        uptime = utilities.seconds_to_units(int(nowtime - intStartTime))
-        await ctx.send(f"Tommy has been online for `{uptime}`.")
-
-
-bot.add_cog(Utilities(bot))
-
+load_errors = []
+for extension in config['enabled_extensions']:  
+    try:
+        extension = f"cogs.{extension}"
+        bot.load_extension(extension)
+    except:
+        load_errors.append(f"Unable to load {extension}")
 
 @bot.listen()
 async def on_command_error(ctx, error):
@@ -173,7 +94,6 @@ async def on_command_error(ctx, error):
 async def globally_block_dms(ctx):
     return ctx.guild is not None
 
-
 @bot.listen()
 async def on_ready():
     print("Logged in")
@@ -184,10 +104,12 @@ async def on_ready():
     # Message Testing Channel #
     chanTest = bot.get_channel(config['testing_Channel'])
     await chanTest.send("Bot has started")
+    for error in load_errors:
+        await chanTest.send(error)
 
     # Update Status #
     guild = bot.get_guild(config['server_ID'])
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game(f"with {guild.member_count - 3} members"))
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game(f"with {guild.member_count - config['botCount']} members"))
 
 
 bot.run(config['token'], bot=True, reconnect=True)

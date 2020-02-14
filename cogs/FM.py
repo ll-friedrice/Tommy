@@ -14,7 +14,7 @@ from PIL import ImageDraw
 
 
 # General Variables #
-with open(abspath('./include/config.yml'), 'r') as configFile:
+with open(abspath('./config/config.yml'), 'r') as configFile:
     config = yaml.safe_load(configFile)
 
 with open(abspath(config['help_file']), 'r') as helpFile:
@@ -196,7 +196,7 @@ class FM(commands.Cog, name="FM Commands"):
                 await ctx.send("Please set your username with !setfm")
 
     @commands.check
-    async def globally_block_dms(ctx):
+    async def globally_block_dms(self, ctx):
         return ctx.guild is not None
 
     @commands.Cog.listener()
@@ -210,4 +210,4 @@ def setup(bot):
 
 
 def teardown(bot):
-    DB.close()
+    DB.close(DBConn)
